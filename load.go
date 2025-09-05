@@ -9,11 +9,11 @@ import (
 
 // Load reads configuration from the given provider and unmarshal it into the provided struct.
 func Load[T any](ctx context.Context, provider provider.Provider, codec codec.Codec) (*T, error) {
-	var config T
 	data, err := provider.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
+	var config T
 	err = codec.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err

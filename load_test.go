@@ -1,7 +1,6 @@
 package confstore
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +22,7 @@ func TestLoadWithFileJSON(t *testing.T) {
 		t.Fatalf("write temp file: %v", err)
 	}
 	fileProv := file.New(p, file.WithTrimBOM())
-	cfg, err := Load[appConf](context.Background(), fileProv, codec.JsonCodec())
+	cfg, err := Load[appConf](fileProv, codec.JsonCodec())
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
 	}

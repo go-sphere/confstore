@@ -1,38 +1,38 @@
-package provider
+package http
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"io"
-	"net/http"
+	nethttp "net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
-type rtFunc func(*http.Request) (*http.Response, error)
+type rtFunc func(*nethttp.Request) (*nethttp.Response, error)
 
-func (f rtFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func (f rtFunc) RoundTrip(r *nethttp.Request) (*nethttp.Response, error) { return f(r) }
 
 func TestHTTPReadSuccess(t *testing.T) {
 	want := "hello"
 	url := "http://example/ok"
-	c := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+	c := &nethttp.Client{Transport: rtFunc(func(r *nethttp.Request) (*nethttp.Response, error) {
 		if r.URL.String() != url {
 			t.Fatalf("unexpected url: %s", r.URL.String())
 		}
-		return &http.Response{
+		return &nethttp.Response{
 			Status:        "200 OK",
 			StatusCode:    200,
 			Body:          io.NopCloser(strings.NewReader(want)),
 			ContentLength: int64(len(want)),
-			Header:        make(http.Header),
+			Header:        make(nethttp.Header),
 			Request:       r,
 		}, nil
 	})}
 
-	p := NewHTTP(url, WithClient(c))
+	p := New(url, WithClient(c))
 	got, err := p.Read(context.Background())
 	if err != nil {
 		t.Fatalf("Read error: %v", err)
@@ -44,27 +44,27 @@ func TestHTTPReadSuccess(t *testing.T) {
 
 func TestHTTPStatusError(t *testing.T) {
 	url := "http://example/err"
-	c := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{
+	c := &nethttp.Client{Transport: rtFunc(func(r *nethttp.Request) (*nethttp.Response, error) {
+		return &nethttp.Response{
 			Status:        "500 Internal Server Error",
 			StatusCode:    500,
 			Body:          io.NopCloser(strings.NewReader("oops")),
 			ContentLength: 4,
-			Header:        make(http.Header),
+			Header:        make(nethttp.Header),
 			Request:       r,
 		}, nil
 	})}
 
-	p := NewHTTP(url, WithMethod(http.MethodGet), WithClient(c))
+	p := New(url, WithMethod(nethttp.MethodGet), WithClient(c))
 	_, err := p.Read(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "unexpected status") || !strings.Contains(msg, http.StatusText(http.StatusInternalServerError)) {
+	if !strings.Contains(msg, "unexpected status") || !strings.Contains(msg, nethttp.StatusText(nethttp.StatusInternalServerError)) {
 		t.Fatalf("error lacks status context: %v", msg)
 	}
-	if !strings.Contains(msg, url) || !strings.Contains(msg, http.MethodGet) {
+	if !strings.Contains(msg, url) || !strings.Contains(msg, nethttp.MethodGet) {
 		t.Fatalf("error lacks method/url context: %v", msg)
 	}
 }
@@ -72,18 +72,18 @@ func TestHTTPStatusError(t *testing.T) {
 func TestHTTPBodyTooLarge(t *testing.T) {
 	big := bytes.Repeat([]byte("a"), 2000)
 	url := "http://example/big"
-	c := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{
+	c := &nethttp.Client{Transport: rtFunc(func(r *nethttp.Request) (*nethttp.Response, error) {
+		return &nethttp.Response{
 			Status:        "200 OK",
 			StatusCode:    200,
 			Body:          io.NopCloser(bytes.NewReader(big)),
 			ContentLength: int64(len(big)),
-			Header:        make(http.Header),
+			Header:        make(nethttp.Header),
 			Request:       r,
 		}, nil
 	})}
 
-	p := NewHTTP(url, WithClient(c), WithMaxBodySize(1024)) // 1KB
+	p := New(url, WithClient(c), WithMaxBodySize(1024)) // 1KB
 	_, err := p.Read(context.Background())
 	if err == nil {
 		t.Fatal("expected error for oversized body, got nil")
@@ -95,24 +95,24 @@ func TestHTTPBodyTooLarge(t *testing.T) {
 
 func TestHTTPContextTimeout(t *testing.T) {
 	url := "http://example/slow"
-	c := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+	c := &nethttp.Client{Transport: rtFunc(func(r *nethttp.Request) (*nethttp.Response, error) {
 		select {
 		case <-r.Context().Done():
 			return nil, r.Context().Err()
 		case <-time.After(50 * time.Millisecond):
 			// too slow; should be canceled by context
-			return &http.Response{
+			return &nethttp.Response{
 				Status:        "200 OK",
 				StatusCode:    200,
 				Body:          io.NopCloser(strings.NewReader("late")),
 				ContentLength: 4,
-				Header:        make(http.Header),
+				Header:        make(nethttp.Header),
 				Request:       r,
 			}, nil
 		}
 	})}
 
-	p := NewHTTP(url, WithClient(c))
+	p := New(url, WithClient(c))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
 	_, err := p.Read(ctx)

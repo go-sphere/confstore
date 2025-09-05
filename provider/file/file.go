@@ -1,4 +1,4 @@
-package provider
+package file
 
 import (
 	"bytes"
@@ -13,44 +13,44 @@ import (
 // Required: a file path. Optional: supply a custom fs, expand env vars in path, trim UTF-8 BOM.
 type File struct {
 	path string
-	opts *fileOptions
+	opts *options
 }
 
-type fileOptions struct {
+type options struct {
 	fsys      fs.FS
 	expandEnv bool
 	trimBOM   bool
 }
 
-// FileOption configures optional behavior for the file provider.
-type FileOption func(*fileOptions)
+// Option configures optional behavior for the file provider.
+type Option func(*options)
 
 // WithFS sets a custom filesystem to read from. When provided, the path is
 // interpreted relative to that filesystem and read via fs.ReadFile.
-func WithFS(fsys fs.FS) FileOption { return func(o *fileOptions) { o.fsys = fsys } }
+func WithFS(fsys fs.FS) Option { return func(o *options) { o.fsys = fsys } }
 
 // WithExpandEnv enables environment-variable expansion in the provided path
 // using os.ExpandEnv, e.g. "$HOME/app/config.json".
-func WithExpandEnv() FileOption { return func(o *fileOptions) { o.expandEnv = true } }
+func WithExpandEnv() Option { return func(o *options) { o.expandEnv = true } }
 
 // WithTrimBOM trims UTF-8 BOM if present at the beginning of the file.
-func WithTrimBOM() FileOption { return func(o *fileOptions) { o.trimBOM = true } }
+func WithTrimBOM() Option { return func(o *options) { o.trimBOM = true } }
 
-func newFileOptions(opts ...FileOption) *fileOptions {
-	defaults := &fileOptions{}
+func newOptions(opts ...Option) *options {
+	defaults := &options{}
 	for _, opt := range opts {
 		opt(defaults)
 	}
 	return defaults
 }
 
-// NewFile creates a file-backed Provider.
+// New creates a file-backed provider implementation.
 // path: required file path. Options control reading behavior.
-func NewFile(path string, opts ...FileOption) *File {
-	return &File{path: path, opts: newFileOptions(opts...)}
+func New(path string, opts ...Option) *File {
+	return &File{path: path, opts: newOptions(opts...)}
 }
 
-// Read implements Provider by loading the file contents.
+// Read loads the file contents and returns the raw bytes.
 func (f *File) Read(_ context.Context) ([]byte, error) {
 	path := f.path
 	if f.opts.expandEnv {

@@ -1,4 +1,4 @@
-package provider
+package http
 
 import (
 	"context"
@@ -15,10 +15,10 @@ import (
 // Required: URL. Optional: headers, timeout, custom client, HTTP method.
 type HTTP struct {
 	url  string
-	opts *httpOptions
+	opts *options
 }
 
-type httpOptions struct {
+type options struct {
 	timeout time.Duration
 	client  *http.Client
 	method  string
@@ -27,25 +27,25 @@ type httpOptions struct {
 	maxBodySize int64
 }
 
-// HTTPOption configures optional behavior for the HTTP provider.
-type HTTPOption func(*httpOptions)
+// Option configures optional behavior for the HTTP provider.
+type Option func(*options)
 
 // WithTimeout sets a client-level timeout for requests when using the
 // internally created http.Client. Default: no timeout (0). Prefer controlling
 // request deadlines with context (e.g., context.WithTimeout). If a custom
 // client is supplied via WithClient, this option is ignored.
-func WithTimeout(d time.Duration) HTTPOption { return func(o *httpOptions) { o.timeout = d } }
+func WithTimeout(d time.Duration) Option { return func(o *options) { o.timeout = d } }
 
 // WithClient sets a custom HTTP client. When provided, it takes precedence
 // over WithTimeout. The provided client will be used as-is.
-func WithClient(c *http.Client) HTTPOption { return func(o *httpOptions) { o.client = c } }
+func WithClient(c *http.Client) Option { return func(o *options) { o.client = c } }
 
 // WithMethod sets the HTTP method. Default: GET.
-func WithMethod(m string) HTTPOption { return func(o *httpOptions) { o.method = m } }
+func WithMethod(m string) Option { return func(o *options) { o.method = m } }
 
 // WithHeader adds or overrides a single request header.
-func WithHeader(key, value string) HTTPOption {
-	return func(o *httpOptions) {
+func WithHeader(key, value string) Option {
+	return func(o *options) {
 		if o.header == nil {
 			o.header = make(http.Header)
 		}
@@ -54,8 +54,8 @@ func WithHeader(key, value string) HTTPOption {
 }
 
 // WithHeaders merges multiple headers into the request headers.
-func WithHeaders(h http.Header) HTTPOption {
-	return func(o *httpOptions) {
+func WithHeaders(h http.Header) Option {
+	return func(o *options) {
 		if h == nil {
 			return
 		}
@@ -73,10 +73,10 @@ func WithHeaders(h http.Header) HTTPOption {
 // WithMaxBodySize limits the maximum response body size in bytes.
 // If the response exceeds this size, Read returns ErrBodyTooLarge.
 // A non-positive value disables the limit.
-func WithMaxBodySize(n int64) HTTPOption { return func(o *httpOptions) { o.maxBodySize = n } }
+func WithMaxBodySize(n int64) Option { return func(o *options) { o.maxBodySize = n } }
 
-func newHTTPOptions(opts ...HTTPOption) *httpOptions {
-	o := &httpOptions{
+func newOptions(opts ...Option) *options {
+	o := &options{
 		// Default: no client timeout. Prefer caller-provided context.
 		timeout: 0,
 		method:  http.MethodGet,
@@ -93,11 +93,11 @@ func newHTTPOptions(opts ...HTTPOption) *httpOptions {
 	return o
 }
 
-// NewHTTP creates an HTTP-backed Provider.
-func NewHTTP(url string, opts ...HTTPOption) *HTTP {
+// New creates an HTTP-backed Provider.
+func New(url string, opts ...Option) *HTTP {
 	return &HTTP{
 		url:  url,
-		opts: newHTTPOptions(opts...),
+		opts: newOptions(opts...),
 	}
 }
 

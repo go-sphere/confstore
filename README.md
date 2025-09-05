@@ -14,7 +14,6 @@ go get github.com/go-sphere/confstore
 package main
 
 import (
-    "context"
     "fmt"
     "github.com/go-sphere/confstore"
     "github.com/go-sphere/confstore/codec"
@@ -29,7 +28,7 @@ type AppConf struct {
 func main() {
     // Load from a local JSON file
     p := file.New("./config.json", file.WithTrimBOM())
-    cfg, err := confstore.Load[AppConf](context.Background(), p, codec.JsonCodec())
+    cfg, err := confstore.Load[AppConf](p, codec.JsonCodec())
     if err != nil { panic(err) }
     fmt.Printf("%+v\n", *cfg)
 }
@@ -66,9 +65,7 @@ p := confhttp.New(srv.URL,
     confhttp.WithHeader("Accept", "application/json"),
     confhttp.WithMaxBodySize(1<<20), // 1MB
 )
-ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-defer cancel()
-cfg, err := confstore.Load[AppConf](ctx, p, codec.JsonCodec())
+cfg, err := confstore.Load[AppConf](p, codec.JsonCodec())
 ```
 
 ## ExpandEnv Adapter

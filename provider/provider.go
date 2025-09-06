@@ -1,6 +1,8 @@
 package provider
 
-import "context"
+import (
+	"context"
+)
 
 // Provider represents a configuration provider. Providers can
 // read configuration from a source (file, HTTP, etc.)

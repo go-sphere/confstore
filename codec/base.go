@@ -10,6 +10,13 @@ type codec struct {
 	decoder DecoderFunc
 }
 
+func NewCodec(encoder EncoderFunc, decoder DecoderFunc) Codec {
+	return &codec{
+		encoder: encoder,
+		decoder: decoder,
+	}
+}
+
 func (c *codec) Marshal(val any) ([]byte, error) {
 	return c.encoder(val)
 }
@@ -27,7 +34,7 @@ var (
 
 // JsonCodec creates a codec for handling JSON serialization and deserialization.
 // It uses the standard library's json.Marshal and json.Unmarshal functions.
-// This codec can handle any type that is supported by the JSON package.
+// This codec can handle any type supported by the JSON package.
 func JsonCodec() Codec {
 	return &codec{
 		encoder: json.Marshal,

@@ -21,15 +21,6 @@ func LoadWithContext[T any](ctx context.Context, provider provider.Provider, cod
 	return &config, nil
 }
 
-// LoadFromFunc creates a provider using the given factory function, then reads configuration from it
-func LoadFromFunc[T any](factory func() (provider.Provider, error), codec codec.Codec) (*T, error) {
-	p, err := factory()
-	if err != nil {
-		return nil, err
-	}
-	return Load[T](p, codec)
-}
-
 // Load reads configuration from the given provider and unmarshal it into the provided struct.
 func Load[T any](provider provider.Provider, codec codec.Codec) (*T, error) {
 	return LoadWithContext[T](context.Background(), provider, codec)
@@ -42,15 +33,6 @@ func FillWithContext(ctx context.Context, provider provider.Provider, codec code
 		return err
 	}
 	return codec.Unmarshal(data, config)
-}
-
-// FillFromFunc creates a provider using the given factory function, then reads configuration from it
-func FillFromFunc(factory func() (provider.Provider, error), codec codec.Codec, config any) error {
-	p, err := factory()
-	if err != nil {
-		return err
-	}
-	return Fill(p, codec, config)
 }
 
 // Fill reads configuration from the given provider and unmarshal it into the provided struct.

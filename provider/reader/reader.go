@@ -11,8 +11,8 @@ type Reader struct {
 	reader io.Reader
 }
 
-// New creates a new Reader that wraps the provided io.Reader.
-func New(r io.Reader) *Reader {
+// NewReader creates a new Reader that wraps the provided io.Reader.
+func NewReader(r io.Reader) *Reader {
 	return &Reader{reader: r}
 }
 

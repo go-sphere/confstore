@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+var (
+	// ErrBodyTooLarge indicates the HTTP response body exceeded the configured max size.
+	ErrBodyTooLarge = errors.New("http provider: body too large")
+)
+
 // HTTP provides configuration bytes fetched from an HTTP(S) endpoint.
 // Required: URL. Optional: headers, timeout, custom client, HTTP method.
 type HTTP struct {
@@ -155,6 +160,3 @@ func IsRemoteURL(path string) bool {
 	s := strings.ToLower(u.Scheme)
 	return (s == "http" || s == "https") && u.Host != ""
 }
-
-// ErrBodyTooLarge indicates the HTTP response body exceeded the configured max size.
-var ErrBodyTooLarge = errors.New("http provider: body too large")

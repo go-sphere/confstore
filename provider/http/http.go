@@ -91,9 +91,9 @@ func newOptions(opts ...Option) *options {
 	}
 	if o.client == nil {
 		o.client = &http.Client{}
-		if o.timeout > 0 {
-			o.client.Timeout = o.timeout
-		}
+	}
+	if o.timeout > 0 {
+		o.client.Timeout = o.timeout
 	}
 	return o
 }

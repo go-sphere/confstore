@@ -1,6 +1,9 @@
 package provider
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 var (
 
@@ -93,4 +96,26 @@ func IfE[T any](cond func(T) bool, then func(T) (Provider, error)) func(T) (Prov
 		}
 		return prov, nil
 	}
+}
+
+// Select is a helper struct to hold the parameter and case functions for Selector.
+type Select[T any] struct {
+	param T
+	cases []func(T) (Provider, error)
+}
+
+// NewSelect creates a new Select instance with the given parameter and case functions.
+func NewSelect[T any](param T, cases ...func(T) (Provider, error)) *Select[T] {
+	return &Select[T]{param: param, cases: cases}
+}
+
+// Read implements the Provider interface for Select.
+// It uses Selector to choose a Provider based on the parameter and cases,
+// then calls Read on the selected Provider.
+func (s *Select[T]) Read(ctx context.Context) ([]byte, error) {
+	provider, err := Selector(s.param, s.cases...)
+	if err != nil {
+		return nil, err
+	}
+	return provider.Read(ctx)
 }

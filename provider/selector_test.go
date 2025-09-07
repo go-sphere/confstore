@@ -10,6 +10,14 @@ type dummyProvider struct{ b []byte }
 
 func (d dummyProvider) Read(ctx context.Context) ([]byte, error) { return d.b, nil }
 
+type testProvider struct {
+	readFunc func(context.Context) ([]byte, error)
+}
+
+func (tp *testProvider) Read(ctx context.Context) ([]byte, error) {
+	return tp.readFunc(ctx)
+}
+
 func TestSelector_FirstMatchWins(t *testing.T) {
 	// First case matches and returns a provider; second also matches but should not be used.
 	p, err := Selector[int](42,
@@ -177,13 +185,4 @@ func TestSelect_WithComplexCases(t *testing.T) {
 	if string(got) != "high-value" {
 		t.Fatalf("got %q, want %q", string(got), "high-value")
 	}
-}
-
-// testProvider is a helper for testing that allows custom Read behavior.
-type testProvider struct {
-	readFunc func(context.Context) ([]byte, error)
-}
-
-func (tp *testProvider) Read(ctx context.Context) ([]byte, error) {
-	return tp.readFunc(ctx)
 }

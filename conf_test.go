@@ -1,12 +1,13 @@
 package confstore
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/go-sphere/confstore/codec"
-	"github.com/go-sphere/confstore/provider/file"
+	"github.com/go-sphere/confstore/provider"
 )
 
 type appConf struct {
@@ -21,8 +22,9 @@ func TestLoadWithFileJSON(t *testing.T) {
 	if err := os.WriteFile(p, content, 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
-	fileProv := file.New(p, file.WithTrimBOM())
-	cfg, err := Load[appConf](fileProv, codec.JsonCodec())
+	cfg, err := Load[appConf](provider.ReaderFunc(func(ctx context.Context) ([]byte, error) {
+		return os.ReadFile(p)
+	}), codec.JsonCodec())
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
 	}

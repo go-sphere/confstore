@@ -11,3 +11,9 @@ type Provider interface {
 	// The provided context controls cancellation and deadlines.
 	Read(ctx context.Context) ([]byte, error)
 }
+
+type ReaderFunc func(ctx context.Context) ([]byte, error)
+
+func (f ReaderFunc) Read(ctx context.Context) ([]byte, error) {
+	return f(ctx)
+}

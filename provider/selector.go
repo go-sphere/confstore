@@ -6,7 +6,6 @@ import (
 )
 
 var (
-
 	// ErrNoValidProvider indicates that no suitable provider could be found after attempting all available options.
 	ErrNoValidProvider = errors.New("no valid provider found")
 	// ErrNotMatched indicates that a specific condition for selecting a provider was not met.

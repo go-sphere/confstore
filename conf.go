@@ -27,7 +27,7 @@ func Load[T any](provider provider.Provider, codec codec.Codec) (*T, error) {
 }
 
 // FillWithContext reads configuration from the given provider and unmarshal it into the provided struct with context.
-func FillWithContext(ctx context.Context, provider provider.Provider, codec codec.Codec, config any) error {
+func FillWithContext[T any](ctx context.Context, provider provider.Provider, codec codec.Codec, config T) error {
 	data, err := provider.Read(ctx)
 	if err != nil {
 		return err

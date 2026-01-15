@@ -41,22 +41,22 @@ func (m *FallbackCodecGroup) Unmarshal(data []byte, value any) error {
 	if len(m.codecs) == 0 {
 		return errors.New("fallback unmarshal: no codecs configured")
 	}
-	var joined error
+	if value == nil {
+		return ErrNilPointer
+	}
 	rv := reflect.ValueOf(value)
+	if rv.Kind() != reflect.Pointer {
+		return ErrInvalidType
+	}
+	if rv.IsNil() {
+		return ErrNilPointer
+	}
+	var joined error
 	for i, c := range m.codecs {
-		if rv.Kind() == reflect.Pointer && !rv.IsNil() {
-			// Decode into a temporary value to avoid partial writes.
-			tmp := reflect.New(rv.Elem().Type())
-			if err := c.Unmarshal(data, tmp.Interface()); err == nil {
-				rv.Elem().Set(tmp.Elem())
-				return nil
-			} else {
-				joined = errors.Join(joined, fmt.Errorf("codec[%d]: %w", i, err))
-			}
-			continue
-		}
-		// Fall back to decoding into the provided value (may fail for a non-pointer or nil pointer).
-		if err := c.Unmarshal(data, value); err == nil {
+		// Decode into a temporary value to avoid partial writes.
+		tmp := reflect.New(rv.Elem().Type())
+		if err := c.Unmarshal(data, tmp.Interface()); err == nil {
+			rv.Elem().Set(tmp.Elem())
 			return nil
 		} else {
 			joined = errors.Join(joined, fmt.Errorf("codec[%d]: %w", i, err))

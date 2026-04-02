@@ -84,6 +84,7 @@ wrapped := provider.NewExpandEnv(file.New("./config.json"))
 ## Codecs
 
 - `codec.JsonCodec()` — JSON via stdlib
+- `codec.StrictJsonCodec()` — JSON via stdlib, rejects unknown fields
 - `codec.FallbackCodecGroup` — try multiple codecs in order
 
 ```go

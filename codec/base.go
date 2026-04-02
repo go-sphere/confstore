@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 )
@@ -39,6 +40,19 @@ func JsonCodec() Codec {
 	return &codec{
 		encoder: json.Marshal,
 		decoder: json.Unmarshal,
+	}
+}
+
+// StrictJsonCodec creates a codec for handling JSON serialization and deserialization.
+// Unlike JsonCodec, it rejects JSON objects that contain fields not present in the target struct.
+func StrictJsonCodec() Codec {
+	return &codec{
+		encoder: json.Marshal,
+		decoder: func(data []byte, val any) error {
+			dec := json.NewDecoder(bytes.NewReader(data))
+			dec.DisallowUnknownFields()
+			return dec.Decode(val)
+		},
 	}
 }
 

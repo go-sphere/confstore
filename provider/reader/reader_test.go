@@ -55,3 +55,24 @@ func TestBytesProvider(t *testing.T) {
 		t.Fatalf("got %q, want %q", string(got), "fixed")
 	}
 }
+
+func TestBytesProviderCloning(t *testing.T) {
+	src := []byte("original")
+	p := NewBytes(src)
+
+	got1, err := p.Read(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Mutate the returned slice
+	got1[0] = 'X'
+
+	got2, err := p.Read(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(got2) != "original" {
+		t.Fatalf("got2 was mutated: %q, want %q", string(got2), "original")
+	}
+}

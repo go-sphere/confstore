@@ -35,5 +35,5 @@ func NewBytes(data []byte) *Bytes {
 }
 
 func (b *Bytes) Read(ctx context.Context) ([]byte, error) {
-	return b.data, nil
+	return append([]byte(nil), b.data...), nil
 }

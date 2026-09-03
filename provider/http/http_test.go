@@ -153,3 +153,20 @@ func TestHTTPContextTimeout(t *testing.T) {
 		t.Fatalf("expected DeadlineExceeded, got %v", err)
 	}
 }
+
+func TestHTTPWithClientPreservesTimeout(t *testing.T) {
+	customClient := &nethttp.Client{
+		Timeout: 42 * time.Second,
+	}
+	p := New("http://example.com", WithClient(customClient), WithTimeout(5*time.Second))
+	if p.opts.client.Timeout != 42*time.Second {
+		t.Fatalf("custom client Timeout was mutated: got %v, want 42s", p.opts.client.Timeout)
+	}
+}
+
+func TestHTTPWithTimeoutDefaultClient(t *testing.T) {
+	p := New("http://example.com", WithTimeout(15*time.Second))
+	if p.opts.client.Timeout != 15*time.Second {
+		t.Fatalf("default client Timeout was not set: got %v, want 15s", p.opts.client.Timeout)
+	}
+}

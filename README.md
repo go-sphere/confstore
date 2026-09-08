@@ -95,6 +95,7 @@ group := codec.NewCodecGroup(codec.JsonCodec() /*, yamlCodec, tomlCodec, ...*/)
 - Errors from the HTTP provider include method and URL. Non-2xx statuses report the full status string.
 - When `WithMaxBodySize` is set, bodies exceeding the limit return `http.ErrBodyTooLarge`.
 - Prefer controlling request deadlines with `context.Context` (e.g., `context.WithTimeout`). By default the HTTP client has no timeout; if needed, `provider.WithTimeout` configures a client-level timeout.
+- Only `provider/http` and `provider.Select` honor context cancellation / deadlines. `provider/file` and `provider/reader` do not cancel an in-flight read — `file` fast-fails on a pre-cancelled context, but the underlying `os.ReadFile`/`fs.ReadFile` cannot be interrupted mid-flight.
 
 ## License
 

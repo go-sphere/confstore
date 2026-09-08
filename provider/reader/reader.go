@@ -29,9 +29,10 @@ type Bytes struct {
 }
 
 // NewBytes creates a Bytes provider that always returns the
-// provided byte slice.
+// provided byte slice. The input is cloned at construction so the
+// provider is decoupled from the caller's backing slice.
 func NewBytes(data []byte) *Bytes {
-	return &Bytes{data: data}
+	return &Bytes{data: append([]byte(nil), data...)}
 }
 
 func (b *Bytes) Read(ctx context.Context) ([]byte, error) {

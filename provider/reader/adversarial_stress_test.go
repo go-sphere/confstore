@@ -69,13 +69,10 @@ func TestBytesConstructorSliceAliasing(t *testing.T) {
 	src := []byte("initial-data")
 	p := NewBytes(src)
 
-	// Note: NewBytes stores src directly without cloning in constructor.
-	// If caller mutates src:
+	// NewBytes clones the input, so mutating src afterwards must not affect reads.
 	src[0] = 'M'
 	got, _ := p.Read(context.Background())
-	if string(got) != "Mitial-data" {
-		t.Logf("NewBytes does not clone input slice at construction: got %q", string(got))
-	} else {
-		t.Logf("Observed: NewBytes aliases the constructor input slice (%q)", string(got))
+	if string(got) != "initial-data" {
+		t.Fatalf("NewBytes must clone constructor input: got %q, want %q", string(got), "initial-data")
 	}
 }

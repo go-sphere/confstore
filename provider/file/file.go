@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // File provides configuration bytes loaded from a file on disk or any fs.FS.
@@ -51,7 +52,14 @@ func New(path string, opts ...Option) *File {
 }
 
 // Read loads the file contents and returns the raw bytes.
-func (f *File) Read(_ context.Context) ([]byte, error) {
+//
+// The context is only honored for fast-fail on cancellation; the underlying
+// os.ReadFile / fs.ReadFile cannot be cancelled mid-flight. Pre-cancel a
+// context to avoid the read entirely.
+func (f *File) Read(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	path := f.path
 	if f.opts.expandEnv {
 		path = os.ExpandEnv(path)
@@ -67,6 +75,10 @@ func (f *File) Read(_ context.Context) ([]byte, error) {
 		data, err = os.ReadFile(path)
 	}
 	if err != nil {
+		return nil, err
+	}
+	// The context may have expired while the read was in flight.
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -87,8 +99,11 @@ func IsLocalPath(path string) bool {
 	if filepath.IsAbs(path) {
 		return true
 	}
-	if u, err := url.Parse(path); err == nil && u.Scheme != "" {
-		return u.Scheme == "file"
+	u, err := url.Parse(path)
+	if err == nil && u.Scheme != "" {
+		// A URL with any scheme other than file:// is remote (e.g. http/https).
+		return strings.EqualFold(u.Scheme, "file")
 	}
+	// Absolute, relative, or non-URL string => local.
 	return true
 }

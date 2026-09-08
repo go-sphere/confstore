@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,6 +100,17 @@ func TestFileReadMissing(t *testing.T) {
 	p := New("missing.json", WithFS(fstest.MapFS{}))
 	if _, err := p.Read(context.Background()); err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestFileReadPreCancelledContext(t *testing.T) {
+	p := New("config.json", WithFS(fstest.MapFS{
+		"config.json": {Data: []byte("value")},
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := p.Read(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
 

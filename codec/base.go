@@ -44,7 +44,10 @@ func JsonCodec() Codec {
 
 // StringCodec creates a codec for handling string and *string types.
 // It converts strings to bytes directly without any transformation.
-// For decoding, the target must be a *string pointer.
+//
+// Marshal accepts string or *string; Unmarshal requires a *string target.
+// Other types return ErrInvalidType, which is detected at runtime (not
+// compile time) because the Codec interface takes any.
 func StringCodec() Codec {
 	return &codec{
 		encoder: func(val any) ([]byte, error) {

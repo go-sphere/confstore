@@ -36,6 +36,6 @@ func FillWithContext[T any](ctx context.Context, provider provider.Provider, cod
 }
 
 // Fill reads configuration from the given provider and unmarshal it into the provided struct.
-func Fill(provider provider.Provider, codec codec.Codec, config any) error {
+func Fill[T any](provider provider.Provider, codec codec.Codec, config T) error {
 	return FillWithContext(context.Background(), provider, codec, config)
 }

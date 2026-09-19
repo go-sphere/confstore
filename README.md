@@ -34,6 +34,17 @@ func main() {
 }
 ```
 
+`Load` allocates a new value; use `Fill` to decode into a value you already own
+(for example one carrying defaults). Both have `...WithContext` variants that
+pass a `context.Context` to the provider:
+
+```go
+cfg := AppConf{Addr: "127.0.0.1:8080"} // defaults
+if err := confstore.Fill(p, codec.JsonCodec(), &cfg); err != nil { panic(err) }
+
+cfg, err := confstore.LoadWithContext(ctx, p, codec.JsonCodec())
+```
+
 ## Providers
 
 - `provider/file` — load from filesystem or a custom `fs.FS`.
@@ -94,7 +105,7 @@ group := codec.NewCodecGroup(codec.JsonCodec() /*, yamlCodec, tomlCodec, ...*/)
 
 - Errors from the HTTP provider include method and URL. Non-2xx statuses report the full status string.
 - When `WithMaxBodySize` is set, bodies exceeding the limit return `http.ErrBodyTooLarge`.
-- Prefer controlling request deadlines with `context.Context` (e.g., `context.WithTimeout`). By default the HTTP client has no timeout; if needed, `provider.WithTimeout` configures a client-level timeout.
+- Prefer controlling request deadlines with `context.Context` (e.g., `context.WithTimeout`). By default the HTTP client has no timeout; if needed, `http.WithTimeout` configures a client-level timeout.
 - Only `provider/http` and `provider.Select` honor context cancellation / deadlines. `provider/file` and `provider/reader` do not cancel an in-flight read — `file` fast-fails on a pre-cancelled context, but the underlying `os.ReadFile`/`fs.ReadFile` cannot be interrupted mid-flight.
 
 ## License

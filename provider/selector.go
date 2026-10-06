@@ -6,11 +6,16 @@ import (
 )
 
 var (
-	// ErrNoValidProvider indicates that no suitable provider could be found after attempting all available options.
+	// ErrNoValidProvider is joined into the error returned by Selector,
+	// SelectorWithErrors, and Select.Read when no case produced a provider.
+	// Test for it with errors.Is.
 	ErrNoValidProvider = errors.New("no valid provider found")
-	// ErrNotMatched indicates that a specific condition for selecting a provider was not met.
+	// ErrNotMatched is returned by a selector case whose condition does not
+	// apply. Selector skips such cases without recording their error. Custom
+	// case functions may return it (or wrap it) to mean "not mine".
 	ErrNotMatched = errors.New("provider not matched")
-	// ErrNilProvider indicates that a case returned a nil Provider without an error.
+	// ErrNilProvider indicates that a case matched but produced a nil
+	// Provider. Selector records it and continues with the next case.
 	ErrNilProvider = errors.New("provider is nil")
 )
 
@@ -22,11 +27,13 @@ func Selector[T any](param T, cases ...func(T) (Provider, error)) (Provider, err
 	return SelectorWithErrors(param, cases...)
 }
 
-// SelectorWithErrors tries each case function in order and returns the first
-// non-nil Provider. When no provider is selected it aggregates non-matching
-// errors (excluding ErrNotMatched) and returns them joined with
-// ErrNoValidProvider. Callers can use errors.Is to test for
-// ErrNoValidProvider while still getting detailed context for debugging.
+// SelectorWithErrors calls each case function with param in order and returns
+// the first non-nil Provider; later cases are not called. Cases returning
+// [ErrNotMatched] are skipped silently. When no provider is selected it
+// returns a nil Provider and an error joining every other case failure
+// (including [ErrNilProvider]) with [ErrNoValidProvider]. Callers can use
+// errors.Is to test for ErrNoValidProvider while still getting detailed
+// context for debugging.
 func SelectorWithErrors[T any](param T, cases ...func(T) (Provider, error)) (Provider, error) {
 	var joined []error
 	for _, c := range cases {
@@ -47,10 +54,10 @@ func SelectorWithErrors[T any](param T, cases ...func(T) (Provider, error)) (Pro
 	return nil, errors.Join(joined...)
 }
 
-// If creates a case function for Selector.
-// It takes a condition function and a then function.
-// If the condition returns true for the given parameter, it calls the then function to get the Provider.
-// If the condition returns false, it returns an error indicating no match.
+// If returns a case function for [Selector], [SelectorWithErrors], or
+// [NewSelect]. The case returns [ErrNotMatched] when cond reports false;
+// otherwise it returns then(param), or [ErrNilProvider] if that is nil.
+// then is called only when cond reports true.
 func If[T any](cond func(T) bool, then func(T) Provider) func(T) (Provider, error) {
 	return func(p T) (Provider, error) {
 		if cond(p) {
@@ -64,8 +71,10 @@ func If[T any](cond func(T) bool, then func(T) Provider) func(T) (Provider, erro
 	}
 }
 
-// IfE is like If, but allows the then function to return an error.
-// Useful when provider construction can fail and the error should be surfaced.
+// IfE is like [If], but then may fail. When cond reports true and then
+// returns an error, the case returns that error unchanged, and Selector records
+// it in its joined error before trying the next case. A nil provider with a nil
+// error becomes [ErrNilProvider].
 func IfE[T any](cond func(T) bool, then func(T) (Provider, error)) func(T) (Provider, error) {
 	return func(p T) (Provider, error) {
 		if !cond(p) {
@@ -82,21 +91,25 @@ func IfE[T any](cond func(T) bool, then func(T) (Provider, error)) func(T) (Prov
 	}
 }
 
-// Select is a helper struct to hold the parameter and case functions for Selector.
+// Select is a [Provider] that defers provider selection until Read. Create
+// it with [NewSelect].
 type Select[T any] struct {
 	param T
 	cases []func(T) (Provider, error)
 }
 
-// NewSelect creates a new Select instance with the given parameter and case functions.
+// NewSelect returns a [Select] that will run [Selector] with param and cases
+// on every Read. No case function is called by NewSelect itself.
 func NewSelect[T any](param T, cases ...func(T) (Provider, error)) *Select[T] {
 	return &Select[T]{param: param, cases: cases}
 }
 
 // Read implements the Provider interface for Select.
 // It uses Selector to choose a Provider based on the parameter and cases,
-// then calls Read on the selected Provider. If no provider is selected, the
-// error matches ErrNoValidProvider and wraps the failures of the cases tried.
+// then calls Read on the selected Provider. Selection runs again on every
+// call. If no provider is selected, the error matches ErrNoValidProvider and
+// wraps the failures of the cases tried; errors from the selected provider's
+// Read are returned unchanged.
 func (s *Select[T]) Read(ctx context.Context) ([]byte, error) {
 	provider, err := Selector(s.param, s.cases...)
 	if err != nil {

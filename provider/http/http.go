@@ -12,12 +12,17 @@ import (
 )
 
 var (
-	// ErrBodyTooLarge indicates the HTTP response body exceeded the configured max size.
+	// ErrBodyTooLarge is wrapped by the error from HTTP.Read when the response
+	// body exceeds the limit set with WithMaxBodySize. Test for it with
+	// errors.Is.
 	ErrBodyTooLarge = errors.New("http provider: body too large")
 )
 
-// HTTP provides configuration bytes fetched from an HTTP(S) endpoint.
-// Required: URL. Optional: headers, timeout, custom client, HTTP method.
+// HTTP is a provider.Provider that returns the body of an HTTP(S) response.
+//
+// Create it with [New]; the zero value is not usable. An HTTP is immutable
+// after construction and safe for concurrent use when its [net/http.Client]
+// is (the default client is).
 type HTTP struct {
 	url  string
 	opts *options
@@ -32,7 +37,8 @@ type options struct {
 	maxBodySize int64
 }
 
-// Option configures optional behavior for the HTTP provider.
+// Option configures optional behavior for [New]. Options are applied in
+// order when New is called, so a later option overrides an earlier one.
 type Option func(*options)
 
 // WithTimeout sets a client-level timeout for requests when using the
@@ -45,10 +51,13 @@ func WithTimeout(d time.Duration) Option { return func(o *options) { o.timeout =
 // over WithTimeout. The provided client will be used as-is.
 func WithClient(c *http.Client) Option { return func(o *options) { o.client = c } }
 
-// WithMethod sets the HTTP method. Default: GET.
+// WithMethod sets the HTTP method. Default: GET. The request never has a
+// body, whatever the method.
 func WithMethod(m string) Option { return func(o *options) { o.method = m } }
 
-// WithHeader adds or overrides a single request header.
+// WithHeader sets a request header, replacing any values previously set for
+// the same key by earlier options. The key is canonicalized as by
+// [net/http.Header.Set].
 func WithHeader(key, value string) Option {
 	return func(o *options) {
 		if o.header == nil {
@@ -58,7 +67,9 @@ func WithHeader(key, value string) Option {
 	}
 }
 
-// WithHeaders merges multiple headers into the request headers.
+// WithHeaders appends every value in h to the request headers, keeping values
+// already added by earlier options. A nil h is ignored. h is copied when the
+// option is applied, so later changes to h have no effect.
 func WithHeaders(h http.Header) Option {
 	return func(o *options) {
 		if h == nil {
@@ -75,9 +86,10 @@ func WithHeaders(h http.Header) Option {
 	}
 }
 
-// WithMaxBodySize limits the maximum response body size in bytes.
-// If the response exceeds this size, Read returns ErrBodyTooLarge.
-// A non-positive value disables the limit.
+// WithMaxBodySize limits the response body size to n bytes.
+// If the response exceeds this size, Read returns an error wrapping
+// [ErrBodyTooLarge] and no data. A non-positive value disables the limit,
+// which is the default.
 func WithMaxBodySize(n int64) Option { return func(o *options) { o.maxBodySize = n } }
 
 func newOptions(opts ...Option) *options {
@@ -98,7 +110,10 @@ func newOptions(opts ...Option) *options {
 	return o
 }
 
-// New creates an HTTP-backed Provider.
+// New returns an [HTTP] provider for url. No request is made and url is not
+// validated until Read; an invalid URL is reported by Read. Without options
+// New uses GET, no extra headers, no body limit, and a new [net/http.Client]
+// without a timeout.
 func New(url string, opts ...Option) *HTTP {
 	return &HTTP{
 		url:  url,
@@ -106,7 +121,16 @@ func New(url string, opts ...Option) *HTTP {
 	}
 }
 
-// Read implements Provider by performing the HTTP request and returning the body bytes.
+// Read performs the configured request and returns the full response body.
+//
+// The request is bound to ctx, so cancelling ctx or reaching its deadline
+// aborts it; no work outlives the call and the response body is always
+// closed. Read returns an error and no data when the request cannot be
+// built or sent, when the status code is not 2xx, when reading the body
+// fails, or when the body exceeds the [WithMaxBodySize] limit (the error then
+// wraps [ErrBodyTooLarge]). Transport errors are wrapped with %w, so
+// errors.Is(err, context.DeadlineExceeded) works; the non-2xx status error is
+// not a sentinel and includes the status text.
 func (h *HTTP) Read(ctx context.Context) ([]byte, error) {
 	// Use caller-provided context for per-request cancellation/deadlines.
 	// If WithTimeout was specified without a custom client, client.Timeout
@@ -151,7 +175,9 @@ func (h *HTTP) Read(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// IsRemoteURL reports whether the given path is a remote HTTP(S) URL.
+// IsRemoteURL reports whether path parses as an absolute "http" or "https"
+// URL (scheme matched case-insensitively) with a non-empty host. It does not
+// contact the server.
 func IsRemoteURL(path string) bool {
 	u, err := url.Parse(path)
 	if err != nil {

@@ -10,6 +10,11 @@ type codec struct {
 	decoder DecoderFunc
 }
 
+// NewCodec returns a [Codec] whose Marshal calls encoder and whose Unmarshal
+// calls decoder. Results and errors are passed through unchanged. Both
+// functions must be non-nil; a nil function panics when its method is called.
+//
+//	c := codec.NewCodec(json.Marshal, json.Unmarshal)
 func NewCodec(encoder EncoderFunc, decoder DecoderFunc) Codec {
 	return &codec{
 		encoder: encoder,
@@ -26,15 +31,20 @@ func (c *codec) Unmarshal(data []byte, val any) error {
 }
 
 var (
-	// ErrInvalidType indicates that the provided type is not supported by the codec operation.
+	// ErrInvalidType is returned when a value's type is not supported by the
+	// codec operation, such as a non-*string target for [StringCodec] or a
+	// non-pointer target for [FallbackCodecGroup.Unmarshal].
 	ErrInvalidType = errors.New("invalid type for codec operation")
-	// ErrNilPointer indicates that a nil pointer was provided for marshaling, which is not allowed.
+	// ErrNilPointer is returned when a nil pointer (or nil interface) is passed
+	// where a value is required, for both marshal and unmarshal operations.
 	ErrNilPointer = errors.New("nil pointer cannot be marshaled")
 )
 
-// JsonCodec creates a codec for handling JSON serialization and deserialization.
-// It uses the standard library's json.Marshal and json.Unmarshal functions.
-// This codec can handle any type supported by the JSON package.
+// JsonCodec returns a [Codec] backed by [encoding/json.Marshal] and
+// [encoding/json.Unmarshal]. Unmarshal follows encoding/json rules: the target
+// must be a non-nil pointer, unknown fields are ignored, and fields absent from
+// the input keep their existing values. Errors from encoding/json are returned
+// unchanged.
 func JsonCodec() Codec {
 	return &codec{
 		encoder: json.Marshal,
@@ -42,12 +52,13 @@ func JsonCodec() Codec {
 	}
 }
 
-// StringCodec creates a codec for handling string and *string types.
-// It converts strings to bytes directly without any transformation.
+// StringCodec returns a [Codec] that copies raw bytes to and from strings
+// without any parsing or transformation.
 //
-// Marshal accepts string or *string; Unmarshal requires a *string target.
-// Other types return ErrInvalidType, which is detected at runtime (not
-// compile time) because the Codec interface takes any.
+// Marshal accepts a string or a *string. Unmarshal requires a *string target
+// and overwrites it with the data. A nil *string yields [ErrNilPointer]; any
+// other type yields [ErrInvalidType]. Both are reported at run time because the
+// Codec interface takes any.
 func StringCodec() Codec {
 	return &codec{
 		encoder: func(val any) ([]byte, error) {

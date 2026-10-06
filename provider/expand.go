@@ -20,8 +20,9 @@ type ExpandEnv struct {
 	provider Provider
 }
 
-// NewExpandEnv wraps an existing Provider and returns a new Provider that
-// expands environment variable placeholders in the returned bytes.
+// NewExpandEnv wraps provider, which must be non-nil, and returns a
+// [Provider] that expands environment variable placeholders in the bytes it
+// returns. Variables are looked up on every Read, not at construction.
 func NewExpandEnv(provider Provider) *ExpandEnv {
 	return &ExpandEnv{provider: provider}
 }
@@ -29,6 +30,7 @@ func NewExpandEnv(provider Provider) *ExpandEnv {
 // Read implements Provider. It reads bytes from the wrapped provider and then
 // applies os.ExpandEnv to expand environment variables. If there is no '$'
 // in the content, the original bytes are returned without allocation.
+// An error from the wrapped provider is returned unchanged.
 func (e *ExpandEnv) Read(ctx context.Context) ([]byte, error) {
 	data, err := e.provider.Read(ctx)
 	if err != nil {

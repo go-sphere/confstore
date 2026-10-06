@@ -15,32 +15,19 @@ var (
 )
 
 // Selector tries each case function in order with the given parameter.
-// It returns the first Provider that does not return an error.
-// If all cases return an error, it returns an error indicating no valid provider was found.
+// It returns the first non-nil Provider produced without an error.
+// If no case yields a provider, the returned error matches ErrNoValidProvider
+// under errors.Is and also carries every case failure other than ErrNotMatched
+// (including ErrNilProvider for cases that returned (nil, nil)), so the reason
+// a matching case failed is not lost. It is equivalent to SelectorWithErrors.
 func Selector[T any](param T, cases ...func(T) (Provider, error)) (Provider, error) {
-	for _, c := range cases {
-		provider, err := c(param)
-		if err != nil {
-			// Ignore not-matched and continue trying others.
-			if errors.Is(err, ErrNotMatched) {
-				continue
-			}
-			// Any other error means this case failed; continue to next.
-			continue
-		}
-		if provider != nil {
-			return provider, nil
-		}
-		// Guard: a case that returns (nil, nil) should not succeed.
-		// Treat as non-match and continue.
-		continue
-	}
-	return nil, ErrNoValidProvider
+	return SelectorWithErrors(param, cases...)
 }
 
-// SelectorWithErrors behaves like Selector but aggregates non-matching errors
-// (excluding ErrNotMatched) and returns them joined with ErrNoValidProvider
-// when no provider is selected. Callers can use errors.Is to test for
+// SelectorWithErrors tries each case function in order and returns the first
+// non-nil Provider. When no provider is selected it aggregates non-matching
+// errors (excluding ErrNotMatched) and returns them joined with
+// ErrNoValidProvider. Callers can use errors.Is to test for
 // ErrNoValidProvider while still getting detailed context for debugging.
 func SelectorWithErrors[T any](param T, cases ...func(T) (Provider, error)) (Provider, error) {
 	var joined []error
@@ -110,7 +97,8 @@ func NewSelect[T any](param T, cases ...func(T) (Provider, error)) *Select[T] {
 
 // Read implements the Provider interface for Select.
 // It uses Selector to choose a Provider based on the parameter and cases,
-// then calls Read on the selected Provider.
+// then calls Read on the selected Provider. If no provider is selected, the
+// error matches ErrNoValidProvider and wraps the failures of the cases tried.
 func (s *Select[T]) Read(ctx context.Context) ([]byte, error) {
 	provider, err := Selector(s.param, s.cases...)
 	if err != nil {

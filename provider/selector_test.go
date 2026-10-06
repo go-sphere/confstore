@@ -59,6 +59,26 @@ func TestSelector_NilProviderIgnored(t *testing.T) {
 	}
 }
 
+func TestSelector_CarriesCaseErrors(t *testing.T) {
+	boom := errors.New("boom")
+	p, err := Selector[int](7,
+		IfE(func(i int) bool { return i == 7 }, func(i int) (Provider, error) { return nil, boom }),
+		If(func(i int) bool { return false }, func(i int) Provider { return dummyProvider{b: []byte("x")} }),
+	)
+	if p != nil {
+		t.Fatalf("expected nil provider, got %#v", p)
+	}
+	if !errors.Is(err, ErrNoValidProvider) {
+		t.Fatalf("expected ErrNoValidProvider, got %v", err)
+	}
+	if !errors.Is(err, boom) {
+		t.Fatalf("expected joined boom error, got %v", err)
+	}
+	if errors.Is(err, ErrNotMatched) {
+		t.Fatalf("ErrNotMatched should not be joined, got %v", err)
+	}
+}
+
 func TestIfE_AndSelectorWithErrors(t *testing.T) {
 	boom := errors.New("boom")
 	// First matches but fails to build; second returns nil provider; expect aggregated error.
@@ -110,6 +130,21 @@ func TestSelect_NoMatchingProvider(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNoValidProvider) {
 		t.Fatalf("expected ErrNoValidProvider, got %v", err)
+	}
+}
+
+func TestSelect_NoProviderCarriesCaseErrors(t *testing.T) {
+	constructionErr := errors.New("construction failed")
+	s := NewSelect[int](1,
+		IfE(func(i int) bool { return i == 1 }, func(i int) (Provider, error) { return nil, constructionErr }),
+	)
+
+	_, err := s.Read(context.Background())
+	if !errors.Is(err, ErrNoValidProvider) {
+		t.Fatalf("expected ErrNoValidProvider, got %v", err)
+	}
+	if !errors.Is(err, constructionErr) {
+		t.Fatalf("expected joined construction error, got %v", err)
 	}
 }
 

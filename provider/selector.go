@@ -14,12 +14,10 @@ var (
 	ErrNilProvider = errors.New("provider is nil")
 )
 
-// Selector tries each case function in order with the given parameter.
-// It returns the first non-nil Provider produced without an error.
-// If no case yields a provider, the returned error matches ErrNoValidProvider
-// under errors.Is and also carries every case failure other than ErrNotMatched
-// (including ErrNilProvider for cases that returned (nil, nil)), so the reason
-// a matching case failed is not lost. It is equivalent to SelectorWithErrors.
+// Selector is equivalent to SelectorWithErrors: it returns the first non-nil
+// Provider, and otherwise an error matching ErrNoValidProvider under errors.Is
+// that also joins every case failure other than ErrNotMatched. Compare with
+// errors.Is, not ==.
 func Selector[T any](param T, cases ...func(T) (Provider, error)) (Provider, error) {
 	return SelectorWithErrors(param, cases...)
 }

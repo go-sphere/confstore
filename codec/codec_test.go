@@ -87,6 +87,42 @@ func TestStringCodecUnmarshalCases(t *testing.T) {
 	}
 }
 
+func TestStrictJsonCodecUnmarshalCases(t *testing.T) {
+	type target struct {
+		Name string `json:"name"`
+	}
+	c := StrictJsonCodec()
+
+	tests := []struct {
+		name    string
+		data    string
+		want    string
+		wantErr bool
+	}{
+		{name: "known-fields", data: `{"name":"alice"}`, want: "alice"},
+		{name: "unknown-fields", data: `{"name":"alice","age":30}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var v target
+			err := c.Unmarshal([]byte(tt.data), &v)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if v.Name != tt.want {
+				t.Fatalf("got %q, want %q", v.Name, tt.want)
+			}
+		})
+	}
+}
+
 func TestFallbackCodecGroupNoCodecs(t *testing.T) {
 	g := NewCodecGroup()
 	if _, err := g.Marshal("data"); err == nil {

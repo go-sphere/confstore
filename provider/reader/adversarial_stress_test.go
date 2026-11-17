@@ -18,7 +18,6 @@ func TestBytesAdversarialConcurrentReadsAndMutations(t *testing.T) {
 	const goroutines = 100
 	const iterations = 100
 	var wg sync.WaitGroup
-	errCh := make(chan error, goroutines*iterations)
 
 	wg.Add(goroutines)
 	for g := 0; g < goroutines; g++ {
@@ -56,11 +55,6 @@ func TestBytesAdversarialConcurrentReadsAndMutations(t *testing.T) {
 	}
 
 	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		t.Fatalf("concurrent mutation test error: %v", err)
-	}
 }
 
 // TestBytesConstructorSliceAliasing checks if mutating the slice originally passed to NewBytes

@@ -105,12 +105,16 @@ func NewSelect[T any](param T, cases ...func(T) (Provider, error)) *Select[T] {
 }
 
 // Read implements the Provider interface for Select.
-// It uses Selector to choose a Provider based on the parameter and cases,
-// then calls Read on the selected Provider. Selection runs again on every
-// call. If no provider is selected, the error matches ErrNoValidProvider and
-// wraps the failures of the cases tried; errors from the selected provider's
-// Read are returned unchanged.
+// If ctx is already done, Read returns ctx.Err() without running any case.
+// Otherwise it uses Selector to choose a Provider based on the parameter and
+// cases, then calls Read on the selected Provider. Selection runs again on
+// every call. If no provider is selected, the error matches ErrNoValidProvider
+// and wraps the failures of the cases tried; errors from the selected
+// provider's Read are returned unchanged.
 func (s *Select[T]) Read(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	provider, err := Selector(s.param, s.cases...)
 	if err != nil {
 		return nil, err

@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 )
+
+var errNilCodec = errors.New("nil codec")
 
 // FallbackCodecGroup is a [Codec] that tries a list of codecs in order and
 // uses the result of the first one that succeeds. Use it when configuration
@@ -18,10 +21,11 @@ type FallbackCodecGroup struct {
 }
 
 // NewCodecGroup returns a [FallbackCodecGroup] that tries codecs in the
-// given order. The codecs slice is retained, not copied. Calling it with no
-// codecs is allowed, but the resulting group fails every operation.
+// given order. The codecs slice is copied at construction. Calling it with no
+// codecs is allowed, but the resulting group fails every operation. A nil
+// codec element fails its attempt and causes fallback to the next codec.
 func NewCodecGroup(codecs ...Codec) *FallbackCodecGroup {
-	return &FallbackCodecGroup{codecs: codecs}
+	return &FallbackCodecGroup{codecs: slices.Clone(codecs)}
 }
 
 // Marshal encodes value with each codec in order and returns the bytes from
@@ -34,6 +38,10 @@ func (m *FallbackCodecGroup) Marshal(value any) ([]byte, error) {
 	}
 	var joined error
 	for i, c := range m.codecs {
+		if c == nil {
+			joined = errors.Join(joined, fmt.Errorf("codec[%d]: %w", i, errNilCodec))
+			continue
+		}
 		data, err := c.Marshal(value)
 		if err == nil {
 			return data, nil
@@ -70,6 +78,10 @@ func (m *FallbackCodecGroup) Unmarshal(data []byte, value any) error {
 	}
 	var joined error
 	for i, c := range m.codecs {
+		if c == nil {
+			joined = errors.Join(joined, fmt.Errorf("codec[%d]: %w", i, errNilCodec))
+			continue
+		}
 		// Decode into a temporary value to avoid partial writes.
 		tmp := reflect.New(rv.Elem().Type())
 		if err := c.Unmarshal(data, tmp.Interface()); err == nil {

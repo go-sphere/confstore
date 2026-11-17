@@ -42,7 +42,7 @@ pass a `context.Context` to the provider:
 cfg := AppConf{Addr: "127.0.0.1:8080"} // defaults
 if err := confstore.Fill(p, codec.JsonCodec(), &cfg); err != nil { panic(err) }
 
-cfg, err := confstore.LoadWithContext(ctx, p, codec.JsonCodec())
+loaded, err := confstore.LoadWithContext[AppConf](ctx, p, codec.JsonCodec())
 ```
 
 ## Providers
@@ -61,22 +61,35 @@ cfg, err := confstore.LoadWithContext(ctx, p, codec.JsonCodec())
     - `http.WithHeader(key, value string)` / `http.WithHeaders(h http.Header)`
     - `http.WithMaxBodySize(n int64)` — limit response body size (bytes)
 
+- `provider/reader` — read from an `io.Reader` (`reader.NewReader(r)`) or a fixed immutable byte slice (`reader.NewBytes(b)`).
+
+- `provider.Select` / `provider.Selector` — select a provider dynamically from ordered cases (`provider.If`, `provider.IfE`), e.g. routing remote URLs (`http.IsRemoteURL`) vs local paths (`file.IsLocalPath`). `provider.ReaderFunc` adapts a plain function to `provider.Provider`.
+
 ### HTTP example
 
 ```go
+import confhttp "github.com/go-sphere/confstore/provider/http"
+
 srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
     w.Header().Set("Content-Type", "application/json")
     _, _ = w.Write([]byte(`{"addr":"0.0.0.0:8080","mode":"prod"}`))
 }))
 defer srv.Close()
 
-import confhttp "github.com/go-sphere/confstore/provider/http"
-
 p := confhttp.New(srv.URL,
     confhttp.WithHeader("Accept", "application/json"),
     confhttp.WithMaxBodySize(1<<20), // 1MB
 )
 cfg, err := confstore.Load[AppConf](p, codec.JsonCodec())
+```
+
+### Dynamic Selection example
+
+```go
+p := provider.NewSelect(path,
+    provider.If(confhttp.IsRemoteURL, func(s string) provider.Provider { return confhttp.New(s) }),
+    provider.If(file.IsLocalPath, func(s string) provider.Provider { return file.New(s) }),
+)
 ```
 
 ## ExpandEnv Adapter
@@ -94,8 +107,10 @@ wrapped := provider.NewExpandEnv(file.New("./config.json"))
 
 ## Codecs
 
-- `codec.JsonCodec()` — JSON via stdlib
-- `codec.FallbackCodecGroup` — try multiple codecs in order
+- `codec.JsonCodec()` — JSON via `encoding/json`
+- `codec.StringCodec()` — raw `string` / `*string` pass-through without parsing
+- `codec.NewCodec(encoder, decoder)` — adapt custom marshal/unmarshal functions
+- `codec.FallbackCodecGroup` — try multiple codecs in order (`codec.NewCodecGroup(...)`)
 
 ```go
 group := codec.NewCodecGroup(codec.JsonCodec() /*, yamlCodec, tomlCodec, ...*/)

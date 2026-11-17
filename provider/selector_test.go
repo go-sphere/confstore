@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 type dummyProvider struct{ b []byte }
@@ -219,5 +220,63 @@ func TestSelect_WithComplexCases(t *testing.T) {
 	}
 	if string(got) != "high-value" {
 		t.Fatalf("got %q, want %q", string(got), "high-value")
+	}
+}
+
+func TestSelect_PreCancelledContext(t *testing.T) {
+	tests := []struct {
+		name    string
+		ctx     func() (context.Context, context.CancelFunc)
+		wantErr error
+	}{
+		{
+			name: "canceled",
+			ctx: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, cancel
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			name: "deadline-exceeded",
+			ctx: func() (context.Context, context.CancelFunc) {
+				return context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			},
+			wantErr: context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := tt.ctx()
+			defer cancel()
+
+			caseCalled := false
+			providerCalled := false
+			s := NewSelect[int](1,
+				func(i int) (Provider, error) {
+					caseCalled = true
+					return &testProvider{readFunc: func(ctx context.Context) ([]byte, error) {
+						providerCalled = true
+						return []byte("unexpected"), nil
+					}}, nil
+				},
+			)
+
+			data, err := s.Read(ctx)
+			if data != nil {
+				t.Fatalf("expected nil data, got %v", data)
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("expected %v, got %v", tt.wantErr, err)
+			}
+			if caseCalled {
+				t.Fatal("selector case should not run when context is already done")
+			}
+			if providerCalled {
+				t.Fatal("provider Read should not run when context is already done")
+			}
+		})
 	}
 }

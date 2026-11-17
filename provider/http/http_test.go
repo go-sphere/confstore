@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,15 +15,12 @@ import (
 
 func TestHTTPReadSuccessCases(t *testing.T) {
 	tests := []struct {
-		name        string
-		method      string
-		headers     map[string]string
-		wantBody    string
-		wantHeader  string
-		wantMethod  string
-		statusCode  int
-		statusText  string
-		assertError bool
+		name       string
+		method     string
+		headers    map[string]string
+		wantBody   string
+		wantHeader string
+		wantMethod string
 	}{
 		{
 			name:       "default-get",
@@ -168,5 +166,93 @@ func TestHTTPWithTimeoutDefaultClient(t *testing.T) {
 	p := New("http://example.com", WithTimeout(15*time.Second))
 	if p.opts.client.Timeout != 15*time.Second {
 		t.Fatalf("default client Timeout was not set: got %v, want 15s", p.opts.client.Timeout)
+	}
+}
+
+func newBlockingStreamServer(t *testing.T, statusCode int, contentLength string, chunk []byte) *httptest.Server {
+	t.Helper()
+	unblock := make(chan struct{})
+	srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if contentLength != "" {
+			w.Header().Set("Content-Length", contentLength)
+		}
+		w.WriteHeader(statusCode)
+		_, _ = w.Write(chunk)
+		if flusher, ok := w.(nethttp.Flusher); ok {
+			flusher.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+		case <-unblock:
+		}
+	}))
+	t.Cleanup(func() {
+		close(unblock)
+		srv.Close()
+	})
+	return srv
+}
+
+func TestHTTPBodyTooLargeStreaming(t *testing.T) {
+	srv := newBlockingStreamServer(t, nethttp.StatusOK, "", bytes.Repeat([]byte("a"), 2048))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	p := New(srv.URL, WithMaxBodySize(1024))
+	_, err := p.Read(ctx)
+	if ctx.Err() != nil {
+		t.Fatalf("Read blocked until context expired: %v (err=%v)", ctx.Err(), err)
+	}
+	if !errors.Is(err, ErrBodyTooLarge) {
+		t.Fatalf("expected ErrBodyTooLarge, got %v", err)
+	}
+}
+
+func TestHTTPBodyTooLargeFastFailStreaming(t *testing.T) {
+	srv := newBlockingStreamServer(t, nethttp.StatusOK, "4096", bytes.Repeat([]byte("a"), 2048))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	p := New(srv.URL, WithMaxBodySize(1024))
+	_, err := p.Read(ctx)
+	if ctx.Err() != nil {
+		t.Fatalf("Read blocked until context expired: %v (err=%v)", ctx.Err(), err)
+	}
+	if !errors.Is(err, ErrBodyTooLarge) {
+		t.Fatalf("expected ErrBodyTooLarge, got %v", err)
+	}
+}
+
+func TestHTTPNon2xxStreamingBoundedDrain(t *testing.T) {
+	srv := newBlockingStreamServer(t, nethttp.StatusInternalServerError, "", bytes.Repeat([]byte("e"), 8192))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	p := New(srv.URL)
+	_, err := p.Read(ctx)
+	if ctx.Err() != nil {
+		t.Fatalf("Read blocked until context expired: %v (err=%v)", ctx.Err(), err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "unexpected status") {
+		t.Fatalf("expected unexpected status error, got %v", err)
+	}
+}
+
+func TestHTTPMaxBodySizeMaxInt64(t *testing.T) {
+	srv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		_, _ = io.WriteString(w, "hello")
+	}))
+	defer srv.Close()
+
+	p := New(srv.URL, WithMaxBodySize(math.MaxInt64))
+	got, err := p.Read(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Fatalf("got %q, want %q", string(got), "hello")
 	}
 }

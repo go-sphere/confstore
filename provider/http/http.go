@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -134,7 +135,7 @@ func New(url string, opts ...Option) *HTTP {
 func (h *HTTP) Read(ctx context.Context) ([]byte, error) {
 	// Use caller-provided context for per-request cancellation/deadlines.
 	// If WithTimeout was specified without a custom client, client.Timeout
-	// is set in newHTTPOptions.
+	// is set in newOptions.
 	req, err := http.NewRequestWithContext(ctx, h.opts.method, h.url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("http provider: build request %s %s: %w", h.opts.method, h.url, err)
@@ -150,17 +151,17 @@ func (h *HTTP) Read(ctx context.Context) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		// Bound connection-reuse drain so large or streaming error responses cannot hang Read.
+		_, _ = io.CopyN(io.Discard, resp.Body, 4096)
 		return nil, fmt.Errorf("http provider: %s %s unexpected status %s", h.opts.method, h.url, resp.Status)
 	}
 	var reader io.Reader = resp.Body
-	// Fast-fail when Content-Length is known to exceed the limit.
+	// Fast-fail when Content-Length is known to exceed the limit; close without draining.
 	if h.opts.maxBodySize > 0 && resp.ContentLength > h.opts.maxBodySize {
-		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, fmt.Errorf("%w: content-length %d exceeds limit %d", ErrBodyTooLarge, resp.ContentLength, h.opts.maxBodySize)
 	}
-	if h.opts.maxBodySize > 0 {
-		// Allow reading up to limit+1 to detect overflow precisely.
+	if h.opts.maxBodySize > 0 && h.opts.maxBodySize < math.MaxInt64 {
+		// Allow reading up to limit+1 to detect overflow precisely without int64 wrap.
 		reader = io.LimitReader(resp.Body, h.opts.maxBodySize+1)
 	}
 	data, err := io.ReadAll(reader)
@@ -168,8 +169,6 @@ func (h *HTTP) Read(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("http provider: read body %s %s: %w", h.opts.method, h.url, err)
 	}
 	if h.opts.maxBodySize > 0 && int64(len(data)) > h.opts.maxBodySize {
-		// Body exceeded the limit. Best-effort drain any remaining bytes.
-		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, fmt.Errorf("%w: read %d exceeds limit %d", ErrBodyTooLarge, len(data), h.opts.maxBodySize)
 	}
 	return data, nil

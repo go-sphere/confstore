@@ -127,3 +127,22 @@ func TestFileWithFSUsesProvidedPath(t *testing.T) {
 		t.Fatalf("got %q, want %q", string(got), "value")
 	}
 }
+
+func TestFileReadFileSchemeURL(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(filePath, []byte(`{"ok":true}`), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+	fileURL := "file://" + filepath.ToSlash(filePath)
+	if !IsLocalPath(fileURL) {
+		t.Fatalf("IsLocalPath(%q) = false, want true", fileURL)
+	}
+	got, err := New(fileURL).Read(context.Background())
+	if err != nil {
+		t.Fatalf("Read(%q): %v", fileURL, err)
+	}
+	if string(got) != `{"ok":true}` {
+		t.Fatalf("got %q, want %q", string(got), `{"ok":true}`)
+	}
+}

@@ -78,6 +78,11 @@ func (f *File) Read(ctx context.Context) ([]byte, error) {
 	if f.opts.expandEnv {
 		path = os.ExpandEnv(path)
 	}
+	if f.opts.fsys == nil && strings.HasPrefix(strings.ToLower(path), "file:") {
+		if u, err := url.Parse(path); err == nil && strings.EqualFold(u.Scheme, "file") && (u.Host == "" || strings.EqualFold(u.Host, "localhost")) && u.Path != "" {
+			path = filepath.FromSlash(u.Path)
+		}
+	}
 
 	var (
 		data []byte
@@ -109,7 +114,8 @@ func (f *File) Read(ctx context.Context) ([]byte, error) {
 // path. It returns false for an empty string and for URLs with a scheme other
 // than "file" (such as "https://..."); absolute paths, relative paths, and
 // "file:" URLs return true. IsLocalPath does not check that the file exists.
-// Note that New does not interpret "file://" URLs; pass a plain path to it.
+// [File.Read] also accepts "file://" URLs on the OS filesystem by resolving
+// their path component.
 func IsLocalPath(path string) bool {
 	if path == "" {
 		return false

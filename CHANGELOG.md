@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.0.6 (2026-11-19)
+
 ### Fixes
 
 - `provider/http`: stop draining `resp.Body` when rejecting oversized responses (`WithMaxBodySize`), bound non-2xx connection-reuse draining to 4096 bytes with `io.CopyN`, and guard `WithMaxBodySize(math.MaxInt64)` against signed `int64` overflow in `io.LimitReader`.
